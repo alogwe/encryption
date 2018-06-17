@@ -1,0 +1,8 @@
+production
+node_modules
+*.log
+*.stackdump
+.env
+ignored
+*bundle.js
+*bundle.js.map

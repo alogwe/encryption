@@ -1,0 +1,18 @@
+{
+	"extends": "airbnb-base",
+	"env": {
+		"node": true,
+		"jquery": true,
+		"qunit": true
+	},
+	"globals": {
+	},
+	"rules": {
+		"linebreak-style": [2, "windows"],
+		"require-jsdoc": [1, { 
+			"require": {
+				"FunctionDeclaration": true
+			}
+		}]
+	}
+}
