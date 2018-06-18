@@ -4,5 +4,4 @@ node_modules
 *.stackdump
 .env
 ignored
-*bundle.js
-*bundle.js.map
+test/tmp/**

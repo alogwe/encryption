@@ -1,5 +1,4 @@
-const path = require('path');
-const fs = require('fs');
+const file = require('./file-ops.js');
 
 let crypto;
 
@@ -10,59 +9,16 @@ try {
   throw (err);
 }
 
-const algorithm = 'aes-256-cbc';
+const CIPHERS = {
+  AES_256_CBC: {
+    name: 'aes-256-cbc',
+    byteSize: 16,
+  },
+};
+
+const algorithm = CIPHERS.AES_256_CBC;
 const encryptionEncoding = 'base64';
 const debugMode = true;
-
-
-/**
- * Saves data to a file
- * @param {String} file File path (including extension)
- * @param {String} data Data to write to the file
- * @returns {Promise} Promise resolves with the data that was written to the file
- */
-function writeFile(file, data, encoding = 'utf8') {
-  return new Promise((resolve, reject) => {
-    const fullPath = path.join(__dirname, file);
-    fs.writeFile(fullPath, data, encoding, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  });
-}
-
-
-/**
- * TODO:
- * @param {String} file
- */
-function readFile(file, encoding = 'utf8') {
-  return new Promise((resolve, reject) => {
-    const fullPath = path.join(__dirname, file);
-    fs.readFile(fullPath, encoding, (err, data) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  });
-}
-
-
-/**
- * @param {String} alg Algorithm
- */
-function getByteSizeOfAlgorithm(alg) {
-  let size = 0;
-  if (alg === 'aes-256-cbc') {
-    size = 16;
-  }
-  return size;
-}
 
 
 /**
@@ -70,7 +26,7 @@ function getByteSizeOfAlgorithm(alg) {
  * @returns {String}
  */
 function createInitVector() {
-  const numBytes = getByteSizeOfAlgorithm(algorithm);
+  const numBytes = algorithm.byteSize;
   const iv = crypto.randomBytes(numBytes).toString('base64');
 
   // ensure returned String cannot be longer than numBytes
@@ -92,8 +48,9 @@ function logError(err) {
 /**
  * @returns {String} Derived hex key
  */
-function createKey(password, keyLength) {
+function createKey(password) {
   return new Promise((resolve, reject) => {
+    const keyLength = algorithm.byteSize;
     const salt = createInitVector(); // salt is also an init vector
     const iterations = 100e3;
     const digest = 'sha512';
@@ -116,26 +73,29 @@ function createKey(password, keyLength) {
  * @param {String} password Password used to generate key (pbkdf2)
  * @param {String} inFile File to be encrypted
  * @param {String} outFile Output file
- * @returns
+ * @returns {Promise} Resolves with encrypted data (including pre-pended initialization vector);
+ * Rejects on error;
  */
-function encrypt(password, inFile, outFile) {
+function encrypt(password, inFile, outFile, keyFile) {
+  if (typeof keyFile === 'undefined') {
+    keyFile = `${inFile}.key`; // TODO: ESLint ignore reassignment of param (guarded?)
+  }
   return new Promise((resolve, reject) => {
-    const keyLength = getByteSizeOfAlgorithm(algorithm);
     let cipher;
     let iv;
 
-    createKey(password, keyLength, outFile)
+    createKey(password)
       .then((key) => {
         iv = createInitVector();
-        writeFile(`${outFile}.key`, key);
-        cipher = crypto.createCipheriv(algorithm, key, iv);
+        cipher = crypto.createCipheriv(algorithm.name, key, iv);
+        return file.write(keyFile, key);
       })
-      .then(() => readFile(inFile))
+      .then(() => file.read(inFile))
       .then((input) => {
         let data = cipher.update(input, 'utf8', encryptionEncoding);
         data += cipher.final(encryptionEncoding);
         const allData = iv + data;
-        writeFile(outFile, allData);
+        file.write(outFile, allData);
         resolve(allData);
       })
       .catch((err) => {
@@ -149,18 +109,18 @@ function encrypt(password, inFile, outFile) {
 /**
  * Decrypts a file using the specified key file
  * Writes the unencrypted output to disk.
- * @param {String} keyFile Key file that was generated during encryption
  * @param {String} inFile Data to be decrypted
  * @param {String} outFile Filename for decrypted data
- * @returns {Promise} 
+ * @param {String} keyFile Key file that was generated during encryption
+ * @returns {Promise} Resolves with decrypted data; Rejects on error;
  */
 function decrypt(keyFile, inFile, outFile) {
   return new Promise((resolve, reject) => {
-    const ivSize = getByteSizeOfAlgorithm(algorithm);
+    const ivSize = algorithm.byteSize;
 
-    const readKey = readFile(keyFile);
+    const readKey = file.read(keyFile);
 
-    const readEncryptedFile = readFile(inFile).then(data => ({
+    const readEncryptedFile = file.read(inFile).then(data => ({
       iv: data.substring(0, ivSize),
       data: data.substring(ivSize),
     }));
@@ -168,13 +128,15 @@ function decrypt(keyFile, inFile, outFile) {
     Promise.all([readKey, readEncryptedFile])
       .then((values) => {
         const [key, encryptedFile] = values;
-        const decipher = crypto.createDecipheriv(algorithm, key, encryptedFile.iv);
+        const decipher = crypto.createDecipheriv(algorithm.name, key, encryptedFile.iv);
         const outputEncoding = 'utf8';
 
         let unencrypted = decipher.update(encryptedFile.data, encryptionEncoding, outputEncoding);
         unencrypted += decipher.final(outputEncoding);
 
-        writeFile(outFile, unencrypted);
+        return file.write(outFile, unencrypted);
+      })
+      .then((unencrypted) => {
         resolve(unencrypted);
       })
       .catch((err) => {
@@ -184,7 +146,8 @@ function decrypt(keyFile, inFile, outFile) {
   });
 }
 
-
-encrypt('7&twHS!17PqRcc5N2$Aw', './ignored/input.json', './ignored/encrypted');
-
-// decrypt('./ignored/encrypted.key', './ignored/encrypted', './ignored/decrypted.json');
+module.exports = {
+  CIPHERS,
+  encrypt,
+  decrypt,
+};
