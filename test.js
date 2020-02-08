@@ -47,8 +47,7 @@ test('encrypt/decrypt files', (t) => {
       t.equal(output, input, 'Decrypted output is equal to the input file data.');
     })
     .then(() => {
-      // TODO: afterEach() callback?
-      // Cleanup
+      // TODO: Move cleanup function to afterEach() callback?
       rimraf(tmpDir, (err) => {
         if (err) {
           throw err;

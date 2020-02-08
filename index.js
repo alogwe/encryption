@@ -12,8 +12,9 @@ try {
 const CIPHERS = {
   AES_256_CBC: {
     name: 'aes-256-cbc',
-    byteSize: 16,
-    keyLength: 256,
+    ivLength: 16, // bytes
+    keyLength: 16, // bytes
+    // fileEncoding: 'base64',
   },
 };
 
@@ -21,29 +22,28 @@ const CIPHERS = {
 // const algorithm = CIPHERS[process.argv[2]]
 const algorithm = CIPHERS.AES_256_CBC;
 const encryptionEncoding = 'base64';
-const debugMode = false;
 
 
 /**
  * Generates random bytes to be used as an initialization vector
  * @returns {String}
  */
-function createInitVector(algo) {
-  const numBytes = algo.byteSize;
+function createInitVector(numBytes) {
   const iv = crypto.randomBytes(numBytes).toString(encryptionEncoding);
 
+  // TODO: remove this slice() ?
   // ensure returned String cannot be longer than numBytes
   return iv.slice(0, numBytes);
 }
 
 
 /**
- * Log errors
+ * Simple logging function
  */
-function logError(err) {
-  console.error(err);
-  if (debugMode) {
-    throw err;
+function log(msg, fn = 'log', throws = false) {
+  console[fn](msg);
+  if (throws) {
+    throw new Error(msg);
   }
 }
 
@@ -53,18 +53,16 @@ function logError(err) {
  */
 function createKey(password) {
   return new Promise((resolve, reject) => {
-    // const keyLength = algorithm.byteSize;
-    const { keyLength: kl } = algorithm;
-    const salt = createInitVector(algorithm); // salt is also an init vector
-    const iterations = 100e3;
+    const salt = createInitVector(algorithm.ivLength); // salt is also an init vector
+    const iterations = 500e3;
     const digest = 'sha512';
 
     // derivedKey is <Buffer>;
-    crypto.pbkdf2(password, salt, iterations, kl, digest, (err, derivedKey) => {
+    crypto.pbkdf2(password, salt, iterations, algorithm.keyLength, digest, (err, derivedKey) => {
       if (err) {
         reject(err);
       } else {
-        resolve(derivedKey.toString(encryptionEncoding));
+        resolve(derivedKey.toString('hex'));
       }
     });
   });
@@ -85,10 +83,11 @@ function encrypt(password, inFile, outFile, keyFile) {
   return new Promise((resolve, reject) => {
     let cipher;
     let iv;
+    let allData;
 
     createKey(password)
       .then((key) => {
-        iv = createInitVector(algorithm);
+        iv = createInitVector(algorithm.ivLength);
         cipher = crypto.createCipheriv(algorithm.name, key, iv);
         return file.write(keyFile, key);
       })
@@ -96,12 +95,12 @@ function encrypt(password, inFile, outFile, keyFile) {
       .then((input) => {
         let data = cipher.update(input, 'utf8', encryptionEncoding);
         data += cipher.final(encryptionEncoding);
-        const allData = iv + data;
-        file.write(outFile, allData);
-        resolve(allData);
+        allData = iv + data;
+        return file.write(outFile, allData);
       })
+      .then(() => resolve(allData))
       .catch((err) => {
-        logError(err);
+        log(err);
         reject(err);
       });
   });
@@ -118,12 +117,13 @@ function encrypt(password, inFile, outFile, keyFile) {
  */
 function decrypt(keyFile, inFile, outFile) {
   return new Promise((resolve, reject) => {
-    const ivSize = algorithm.byteSize;
+    // const ivSize = algorithm.byteSize;
+    const { ivLength } = algorithm;
     const readKey = file.read(keyFile);
 
     const readEncryptedFile = file.read(inFile).then(data => ({
-      iv: data.substring(0, ivSize),
-      data: data.substring(ivSize),
+      iv: data.substring(0, ivLength),
+      data: data.substring(ivLength),
     }));
 
     Promise.all([readKey, readEncryptedFile])
@@ -141,7 +141,7 @@ function decrypt(keyFile, inFile, outFile) {
         resolve(unencrypted);
       })
       .catch((err) => {
-        logError(err);
+        log(err);
         reject(err);
       });
   });
