@@ -1,6 +1,7 @@
 const encryption = require('./index.js');
 const file = require('./file-ops.js');
 const test = require('tape');
+const rimraf = require('rimraf');
 
 
 /**
@@ -25,16 +26,17 @@ function createTestData() {
 
 
 // write input file -> encrypt -> decrypt to output file -> compare input file to output file
-test('encrypt/decrypt files (using default key file)', (t) => {
+test('encrypt/decrypt files', (t) => {
   const testData = createTestData();
-  const tmpDir = './test/tmp/';
+  const tmpDir = './.tmp/';
   const inFile = `${tmpDir}input.json`;
+  const keyFile = `${inFile}.key`;
   const encryptedFile = `${tmpDir}encrypted`;
   const outFile = `${tmpDir}decrypted.json`;
 
   file.write(inFile, testData)
-    .then(() => encryption.encrypt('Password!IsUsed@byPBKDF2function2Cre4teK3y', inFile, encryptedFile))
-    .then(() => encryption.decrypt(encryptedFile, outFile))
+    .then(() => encryption.encrypt('Password!IsUsed@byPBKDF2function2Cre4teK3y', inFile, encryptedFile, keyFile))
+    .then(() => encryption.decrypt(keyFile, encryptedFile, outFile))
     .then(() => {
       const readInputFile = file.read(inFile);
       const readOutputFile = file.read(outFile);
@@ -45,7 +47,13 @@ test('encrypt/decrypt files (using default key file)', (t) => {
       t.equal(output, input, 'Decrypted output is equal to the input file data.');
     })
     .then(() => {
+      // TODO: afterEach() callback?
       // Cleanup
-      // TODO: Delete files
+      rimraf(tmpDir, (err) => {
+        if (err) {
+          throw err;
+        }
+        t.end(); // end test to avoid false failure
+      });
     });
 });

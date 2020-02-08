@@ -13,21 +13,24 @@ const CIPHERS = {
   AES_256_CBC: {
     name: 'aes-256-cbc',
     byteSize: 16,
+    keyLength: 256,
   },
 };
 
+// TODO: pass in through process.argv list, something like
+// const algorithm = CIPHERS[process.argv[2]]
 const algorithm = CIPHERS.AES_256_CBC;
 const encryptionEncoding = 'base64';
-const debugMode = true;
+const debugMode = false;
 
 
 /**
  * Generates random bytes to be used as an initialization vector
  * @returns {String}
  */
-function createInitVector() {
-  const numBytes = algorithm.byteSize;
-  const iv = crypto.randomBytes(numBytes).toString('base64');
+function createInitVector(algo) {
+  const numBytes = algo.byteSize;
+  const iv = crypto.randomBytes(numBytes).toString(encryptionEncoding);
 
   // ensure returned String cannot be longer than numBytes
   return iv.slice(0, numBytes);
@@ -50,17 +53,18 @@ function logError(err) {
  */
 function createKey(password) {
   return new Promise((resolve, reject) => {
-    const keyLength = algorithm.byteSize;
-    const salt = createInitVector(); // salt is also an init vector
+    // const keyLength = algorithm.byteSize;
+    const { keyLength: kl } = algorithm;
+    const salt = createInitVector(algorithm); // salt is also an init vector
     const iterations = 100e3;
     const digest = 'sha512';
 
     // derivedKey is <Buffer>;
-    crypto.pbkdf2(password, salt, iterations, keyLength, digest, (err, derivedKey) => {
+    crypto.pbkdf2(password, salt, iterations, kl, digest, (err, derivedKey) => {
       if (err) {
         reject(err);
       } else {
-        resolve(derivedKey.toString('hex'));
+        resolve(derivedKey.toString(encryptionEncoding));
       }
     });
   });
@@ -73,20 +77,18 @@ function createKey(password) {
  * @param {String} password Password used to generate key (pbkdf2)
  * @param {String} inFile File to be encrypted
  * @param {String} outFile Output file
+ * @param {String} keyFile Key file to generate during encryption
  * @returns {Promise} Resolves with encrypted data (including pre-pended initialization vector);
  * Rejects on error;
  */
 function encrypt(password, inFile, outFile, keyFile) {
-  if (typeof keyFile === 'undefined') {
-    keyFile = `${inFile}.key`; // TODO: ESLint ignore reassignment of param (guarded?)
-  }
   return new Promise((resolve, reject) => {
     let cipher;
     let iv;
 
     createKey(password)
       .then((key) => {
-        iv = createInitVector();
+        iv = createInitVector(algorithm);
         cipher = crypto.createCipheriv(algorithm.name, key, iv);
         return file.write(keyFile, key);
       })
@@ -109,15 +111,14 @@ function encrypt(password, inFile, outFile, keyFile) {
 /**
  * Decrypts a file using the specified key file
  * Writes the unencrypted output to disk.
+ * @param {String} keyFile Key file that was generated during encryption
  * @param {String} inFile Data to be decrypted
  * @param {String} outFile Filename for decrypted data
- * @param {String} keyFile Key file that was generated during encryption
  * @returns {Promise} Resolves with decrypted data; Rejects on error;
  */
 function decrypt(keyFile, inFile, outFile) {
   return new Promise((resolve, reject) => {
     const ivSize = algorithm.byteSize;
-
     const readKey = file.read(keyFile);
 
     const readEncryptedFile = file.read(inFile).then(data => ({

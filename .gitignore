@@ -4,4 +4,4 @@ node_modules
 *.stackdump
 .env
 ignored
-test/tmp/**
+.tmp/**
