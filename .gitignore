@@ -4,5 +4,6 @@ node_modules
 *.stackdump
 .env
 ignored
-.tmp/**
-.nyc_output/**
+.tmp
+.nyc_output
+coverage
