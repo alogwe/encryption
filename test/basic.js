@@ -1,5 +1,5 @@
 const encryption = require('../index.js');
-const file = require('../file-ops.js');
+const file = require('../lib/file-ops.js');
 const tap = require('tap');
 const rimraf = require('rimraf');
 

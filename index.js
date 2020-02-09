@@ -1,5 +1,5 @@
-const file = require('./file-ops.js');
-const { log } = require('./util.js');
+const file = require('./lib/file-ops.js');
+const { log } = require('./lib/util.js');
 
 let crypto;
 
