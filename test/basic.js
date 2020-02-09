@@ -37,7 +37,7 @@ const generateTempDir = (() => {
    */
   function nextFolderName() {
     testNum += 1;
-    return `./.tmp/${testNum}`;
+    return `./.tmp/${testNum}/`;
   }
 
   return nextFolderName;
