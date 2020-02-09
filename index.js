@@ -1,5 +1,6 @@
 const file = require('./lib/file-ops.js');
-const { log } = require('./lib/util.js');
+const { log } = require('./lib/extras');
+const util = require('util');
 
 let crypto;
 
@@ -9,6 +10,12 @@ try {
   console.error('crypto support is disabled!', err);
   throw (err);
 }
+
+// Create functions that use promises instead of callbacks
+// for use with async/await
+const cryptoPromises = {
+  pbkdf2: util.promisify(crypto.pbkdf2),
+};
 
 const CIPHERS = {
   AES_256_CBC: {
@@ -41,21 +48,12 @@ function createInitVector(numBytes) {
 /**
  * @returns {String} Derived hex key
  */
-function createKey(password) {
-  return new Promise((resolve, reject) => {
-    const salt = createInitVector(algorithm.ivLength); // salt is also an init vector
-    const iterations = 500e3;
-    const digest = 'sha512';
-
-    // derivedKey is <Buffer>;
-    crypto.pbkdf2(password, salt, iterations, algorithm.keyLength, digest, (err, derivedKey) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(derivedKey.toString('hex'));
-      }
-    });
-  });
+async function createKey(password) {
+  const salt = createInitVector(algorithm.ivLength); // salt is also an init vector
+  const iterations = 500e3;
+  const digest = 'sha512';
+  const derivedKey = await cryptoPromises.pbkdf2(password, salt, iterations, algorithm.keyLength, digest);
+  return derivedKey.toString('hex'); // derivedKey is <Buffer>;
 }
 
 
@@ -69,31 +67,23 @@ function createKey(password) {
  * @returns {Promise} Resolves with encrypted data (including pre-pended initialization vector);
  * Rejects on error;
  */
-function encrypt(password, inFile, outFile, keyFile) {
-  return new Promise((resolve, reject) => {
-    let cipher;
-    let iv;
-    let allData;
+async function encrypt(password, inFile, outFile, keyFile) {
+  try {
+    const key = await createKey(password);
+    const iv = createInitVector(algorithm.ivLength);
+    const cipher = crypto.createCipheriv(algorithm.name, key, iv);
 
-    createKey(password)
-      .then((key) => {
-        iv = createInitVector(algorithm.ivLength);
-        cipher = crypto.createCipheriv(algorithm.name, key, iv);
-        return file.write(keyFile, key);
-      })
-      .then(() => file.read(inFile))
-      .then((input) => {
-        let data = cipher.update(input, 'utf8', encryptionEncoding);
-        data += cipher.final(encryptionEncoding);
-        allData = iv + data;
-        return file.write(outFile, allData);
-      })
-      .then(() => resolve(allData))
-      .catch((err) => {
-        log(err);
-        reject(err);
-      });
-  });
+    await file.write(keyFile, key);
+    const input = await file.read(inFile);
+
+    let data = cipher.update(input, 'utf8', encryptionEncoding);
+    data += cipher.final(encryptionEncoding);
+
+    // need to decrypt with same initialization vector and data
+    await file.write(outFile, iv + data);
+  } catch (e) {
+    log(e);
+  }
 }
 
 
@@ -105,36 +95,25 @@ function encrypt(password, inFile, outFile, keyFile) {
  * @param {String} outFile Filename for decrypted data
  * @returns {Promise} Resolves with decrypted data; Rejects on error;
  */
-function decrypt(keyFile, inFile, outFile) {
-  return new Promise((resolve, reject) => {
-    // const ivSize = algorithm.byteSize;
+async function decrypt(keyFile, inFile, outFile) {
+  const outputEncoding = 'utf8';
+  try {
     const { ivLength } = algorithm;
-    const readKey = file.read(keyFile);
 
+    const readKey = file.read(keyFile);
     const readEncryptedFile = file.read(inFile).then(data => ({
       iv: data.substring(0, ivLength),
       data: data.substring(ivLength),
     }));
+    const [key, encryptedFile] = await Promise.all([readKey, readEncryptedFile]);
 
-    Promise.all([readKey, readEncryptedFile])
-      .then((values) => {
-        const [key, encryptedFile] = values;
-        const decipher = crypto.createDecipheriv(algorithm.name, key, encryptedFile.iv);
-        const outputEncoding = 'utf8';
-
-        let unencrypted = decipher.update(encryptedFile.data, encryptionEncoding, outputEncoding);
-        unencrypted += decipher.final(outputEncoding);
-
-        return file.write(outFile, unencrypted);
-      })
-      .then((unencrypted) => {
-        resolve(unencrypted);
-      })
-      .catch((err) => {
-        log(err);
-        reject(err);
-      });
-  });
+    const decipher = crypto.createDecipheriv(algorithm.name, key, encryptedFile.iv);
+    let unencryptedData = decipher.update(encryptedFile.data, encryptionEncoding, outputEncoding);
+    unencryptedData += decipher.final(outputEncoding);
+    await file.write(outFile, unencryptedData);
+  } catch (err) {
+    log(err);
+  }
 }
 
 module.exports = {

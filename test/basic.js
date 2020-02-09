@@ -1,7 +1,11 @@
 const encryption = require('../index.js');
 const file = require('../lib/file-ops.js');
+const util = require('util');
+const path = require('path');
 const tap = require('tap');
 const rimraf = require('rimraf');
+
+const rmrf = util.promisify(rimraf);
 
 /**
  * @returns {String} Sample input data for test case
@@ -37,7 +41,7 @@ const generateTempDir = (() => {
    */
   function nextFolderName() {
     testNum += 1;
-    return `./.tmp/${testNum}/`;
+    return path.join(__dirname, `.tmp/${testNum}`);
   }
 
   return nextFolderName;
@@ -47,11 +51,10 @@ const generateTempDir = (() => {
 // write input file -> encrypt -> decrypt to output file -> compare input file to output file
 tap.test('encrypt/decrypt files', async (t) => {
   const tmpDir = generateTempDir();
-
-  const inFile = `${tmpDir}input.json`;
+  const inFile = `${tmpDir}/input.json`;
   const keyFile = `${inFile}.key`;
-  const encryptedFile = `${tmpDir}encrypted`;
-  const outFile = `${tmpDir}decrypted.json`;
+  const encryptedFile = `${tmpDir}/encrypted`;
+  const outFile = `${tmpDir}/decrypted.json`;
 
   await file.write(inFile, createTestData());
   await encryption.encrypt('Password!IsUsed@byPBKDF2function2Cre4teK3y', inFile, encryptedFile, keyFile);
@@ -64,13 +67,6 @@ tap.test('encrypt/decrypt files', async (t) => {
 
   t.equal(output, input, 'Decrypted output is equal to the input file data.');
 
-  // TODO: await version of rimraf?
-  rimraf(tmpDir, (err) => {
-    if (err) {
-      throw err;
-    }
-
-    // end test to avoid false failure
-    t.end();
-  });
+  await rmrf(tmpDir);
+  t.end();
 });
