@@ -1,4 +1,5 @@
 const file = require('./file-ops.js');
+const { log } = require('./util.js');
 
 let crypto;
 
@@ -34,17 +35,6 @@ function createInitVector(numBytes) {
   // TODO: remove this slice() ?
   // ensure returned String cannot be longer than numBytes
   return iv.slice(0, numBytes);
-}
-
-
-/**
- * Simple logging function
- */
-function log(msg, fn = 'log', throws = false) {
-  console[fn](msg);
-  if (throws) {
-    throw new Error(msg);
-  }
 }
 
 
