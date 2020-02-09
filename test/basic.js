@@ -16,8 +16,8 @@ function createTestData() {
     password: 'def34t%All#D4l3ks!',
     profile: {
       name: {
-        first: 'Tennant',
-        last: 'David',
+        first: 'David',
+        last: 'Tennant',
       },
       age: 47,
       occupation: 'Time Lord',
