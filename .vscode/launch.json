@@ -9,7 +9,7 @@
       "type": "node",
       "request": "launch",
       "name": "Debug Tests",
-      "program": "${workspaceFolder}/test.js"
+      "program": "${workspaceFolder}/test/basic.js"
     }
   ]
 }

@@ -24,9 +24,30 @@ function createTestData() {
 }
 
 
+/**
+ * Generates incremental folder names to isolate filesystem per test
+ * and allow parallel execution.
+ * @returns {String} folder name
+ */
+const generateTempDir = (() => {
+  let testNum = 0;
+
+  /**
+   * Closure that generates next folder name
+   */
+  function nextFolderName() {
+    testNum += 1;
+    return `./.tmp/${testNum}`;
+  }
+
+  return nextFolderName;
+})();
+
+
 // write input file -> encrypt -> decrypt to output file -> compare input file to output file
 tap.test('encrypt/decrypt files', async (t) => {
-  const tmpDir = './.tmp/';
+  const tmpDir = generateTempDir();
+
   const inFile = `${tmpDir}input.json`;
   const keyFile = `${inFile}.key`;
   const encryptedFile = `${tmpDir}encrypted`;
@@ -43,7 +64,7 @@ tap.test('encrypt/decrypt files', async (t) => {
 
   t.equal(output, input, 'Decrypted output is equal to the input file data.');
 
-  // TODO: Move cleanup function to afterEach() callback?
+  // TODO: await version of rimraf?
   rimraf(tmpDir, (err) => {
     if (err) {
       throw err;
