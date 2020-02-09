@@ -4,7 +4,8 @@
   "description": "experiments with encryption concepts",
   "main": "index.js",
   "scripts": {
-    "test": "tap"
+    "test": "tap",
+    "test:report": "tap --coverage-report=html"
   },
   "author": "",
   "license": "ISC",
